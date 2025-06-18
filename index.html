@@ -5,30 +5,56 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>DedemTV</title>
     <style>
-        body, html { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; background-color: #000; }
+        body, html { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; background-color: #000; color: white; font-family: sans-serif; cursor: none; }
         .channel-container { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         .channel-container.active { display: block; }
-        #container-clock { display: none; flex-direction: column; justify-content: center; align-items: center; color: white; font-family: sans-serif; }
+        #container-clock { display: none; flex-direction: column; justify-content: center; align-items: center; }
         .active#container-clock { display: flex; }
         #clock-time { font-size: 15vw; } #clock-date { font-size: 5vw; }
         video, iframe { width: 100%; height: 100%; border: none; background-color: #000; }
-        #channel-title { position: absolute; top: 10px; left: 10px; background-color: rgba(0,0,0,0.6); padding: 10px; font-size: 2vw; border-radius: 5px; color: white; font-family: sans-serif; z-index: 50; }
-        .swipe-area { position: absolute; top: 0; width: 50%; height: 100%; z-index: 100; /* Test: background-color: rgba(255,0,0,0.1); */ }
+        #channel-title { position: absolute; top: 10px; left: 10px; background-color: rgba(0,0,0,0.6); padding: 10px; font-size: 2vw; border-radius: 5px; z-index: 50; }
+        .swipe-area { position: absolute; top: 0; width: 15%; height: 100%; z-index: 100; /* Test: background-color: rgba(255,0,0,0.1); */ }
         #swipe-left { left: 0; } #swipe-right { right: 0; }
+        #interaction-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; font-size: 5vw; z-index: 200; text-align:center; }
     </style>
 </head>
 <body>
+    <div id="interaction-layer">Başlatılıyor...</div>
     <div id="channel-title"></div>
     <div id="main-container"></div>
     <div class="swipe-area" id="swipe-left"></div>
     <div class="swipe-area" id="swipe-right"></div>
 
     <script>
+        // --- Durum Yönetimi ---
         let channels, currentChannelIndex = 0;
+        let isInitialized = false;
         let clockInterval;
 
-        function initializeChannels() {
-            const mainContainer = document.getElementById('main-container');
+        // --- Element Referansları ---
+        const mainContainer = document.getElementById('main-container');
+        const titleElement = document.getElementById('channel-title');
+        const interactionLayer = document.getElementById('interaction-layer');
+        const swipeLeft = document.getElementById('swipe-left');
+        const swipeRight = document.getElementById('swipe-right');
+        
+        // --- ANA FONKSİYONLAR ---
+
+        // Sayfa yüklendiğinde konfigürasyonu çek ve kanalları hazırla
+        fetch('config.json')
+            .then(response => response.json())
+            .then(data => {
+                channels = data.channels;
+                buildChannels();
+                interactionLayer.innerText = 'Başlatmak için\nEkrana Dokunun';
+            })
+            .catch(error => {
+                titleElement.innerText = 'Yapılandırma yüklenemedi.';
+                interactionLayer.innerText = 'Hata Oluştu.';
+            });
+            
+        // Tüm kanalları DOM'a ekler ama gizli tutar
+        function buildChannels() {
             channels.forEach((channel, index) => {
                 const container = document.createElement('div');
                 container.id = `channel-${index}`;
@@ -37,83 +63,92 @@
                     container.id = 'container-clock';
                     container.innerHTML = `<div id="clock-time"></div><div id="clock-date"></div>`;
                 } else if (channel.type === 'video') {
+                    // Otomatik oynatma için gereken nitelikler
                     container.innerHTML = `<video src="${channel.url}" loop muted playsinline></video>`;
                 } else if (channel.type === 'web_content') {
                     container.innerHTML = `<iframe src="${channel.url}" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>`;
                 }
                 mainContainer.appendChild(container);
             });
-
-            document.getElementById('swipe-left').addEventListener('click', () => changeChannel(-1));
-            document.getElementById('swipe-right').addEventListener('click', () => changeChannel(1));
-            
-            // Tek bir genel olay dinleyici ile ilk etkileşimi al
-            document.body.addEventListener('click', function oneTimeInit() {
-                // Bu dinleyici kendini ilk tıklamadan sonra kaldırır
-                document.body.removeEventListener('click', oneTimeInit);
-
-                document.querySelectorAll('video').forEach(video => {
-                    video.muted = false; // Sesi aç
-                    if(video.parentElement.classList.contains('active')){
-                       video.play();
-                    }
-                });
-                
-                showChannel(currentChannelIndex, true); // Oynatmayı zorla
-
-            }, { once: true }); // 'once: true' seçeneği en temiz yoldur.
         }
         
+        // İlk etkileşimle sesleri açar ve oynatmayı başlatır
+        function initializePlayback() {
+            if (isInitialized) return;
+            isInitialized = true;
+            interactionLayer.style.display = 'none';
+
+            // Tarayıcının oynatma iznini almak için tüm videoları sessizce bir kez oynatıp duraklatırız.
+            const promises = Array.from(document.querySelectorAll('video')).map(video => video.play());
+
+            Promise.all(promises).then(() => {
+                document.querySelectorAll('video').forEach(video => {
+                    video.pause();
+                    video.muted = false; // Sesleri şimdi aç
+                });
+                // Her şey hazır, ilk kanalı göster ve oynat
+                showChannel(currentChannelIndex, true); 
+            }).catch(e => {
+                console.error("İlk oynatma başarısız oldu:", e);
+                // Başarısız olsa bile göstermeye çalış
+                showChannel(currentChannelIndex, true); 
+            });
+        }
+        
+        // Belirtilen kanalı gösterir, diğerlerini gizler ve duraklatır
         function showChannel(index, forcePlay = false) {
-            const titleElement = document.getElementById('channel-title');
+            if (!isInitialized) return; // Etkileşim olmadan gösterme
+            
             document.querySelectorAll('.channel-container').forEach((el, i) => {
                 const video = el.querySelector('video');
+                
                 if (i === index) {
                     el.classList.add('active');
                     titleElement.innerText = channels[i].title;
+
                     if (channels[i].type === 'clock') {
-                        updateClock(true);
+                        startClock();
                     } else if (video && forcePlay) {
-                        video.play();
+                        video.play().catch(e => console.error("Oynatma hatası:", e));
                     }
                 } else {
                     el.classList.remove('active');
-                    if (channels[i].type === 'clock') updateClock(false);
+                    if (channels[i].type === 'clock') stopClock();
                     if (video) video.pause();
                 }
             });
         }
-
+        
+        // Sola veya sağa tıklayarak kanalı değiştirir
         function changeChannel(direction) {
             currentChannelIndex = (currentChannelIndex + direction + channels.length) % channels.length;
             showChannel(currentChannelIndex, true);
         }
         
-        function updateClock(start) {
+        // --- YARDIMCI FONKSİYONLAR ---
+
+        function startClock() {
             clearInterval(clockInterval);
-            if(start) {
-                const tick = () => {
-                    const now = new Date();
-                    const timeEl = document.getElementById('clock-time');
-                    const dateEl = document.getElementById('clock-date');
-                    if(timeEl) timeEl.innerText = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-                    if(dateEl) dateEl.innerText = now.toLocaleDateString('tr-TR', { weekday: 'long', month: 'long', day: 'numeric' });
-                };
-                tick();
-                clockInterval = setInterval(tick, 1000);
-            }
+            const tick = () => {
+                const now = new Date();
+                const timeEl = document.getElementById('clock-time');
+                const dateEl = document.getElementById('clock-date');
+                if(timeEl) timeEl.innerText = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                if(dateEl) dateEl.innerText = now.toLocaleDateString('tr-TR', { weekday: 'long', month: 'long', day: 'numeric' });
+            };
+            tick();
+            clockInterval = setInterval(tick, 1000);
         }
-        
-        fetch('config.json')
-            .then(response => response.json())
-            .then(data => {
-                channels = data.channels;
-                initializeChannels();
-                showChannel(0);
-            })
-            .catch(error => {
-                document.getElementById('channel-title').innerText = 'Yapılandırma yüklenemedi.';
-            });
+
+        function stopClock() {
+            clearInterval(clockInterval);
+        }
+
+        // --- OLAY DİNLEYİCİLERİ ---
+        interactionLayer.addEventListener('click', initializePlayback);
+        swipeLeft.addEventListener('click', (e) => { e.stopPropagation(); changeChannel(-1); });
+        swipeRight.addEventListener('click', (e) => { e.stopPropagation(); changeChannel(1); });
+
     </script>
 </body>
 </html>
