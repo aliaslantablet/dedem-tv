@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head><title>Saat</title><style>body, html { background-color: #000; color: white; font-family: sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; margin: 0; } #time { font-size: 15vw; } #date { font-size: 5vw; }</style></head>
+<body>
+    <div id="time"></div><div id="date"></div>
+    <script>
+        function update() {
+            const now = new Date();
+            document.getElementById('time').innerText = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('date').innerText = now.toLocaleDateString('tr-TR', { weekday: 'long', month: 'long', day: 'numeric' });
+        }
+        update(); setInterval(update, 1000);
+    </script>
+</body>
+</html>
