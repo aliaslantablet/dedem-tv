@@ -8,10 +8,9 @@
         body, html { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; background-color: #000; color: white; font-family: sans-serif; }
         .channel-container { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         .channel-container.active { display: block; }
-        .channel-container#container-clock { display: none; flex-direction: column; justify-content: center; align-items: center; }
-        .channel-container.active#container-clock { display: flex; }
-        #clock-time { font-size: 15vw; }
-        #clock-date { font-size: 5vw; }
+        #container-clock { display: none; flex-direction: column; justify-content: center; align-items: center; }
+        .active#container-clock { display: flex; }
+        #clock-time { font-size: 15vw; } #clock-date { font-size: 5vw; }
         .channel-container video, .channel-container iframe { width: 100%; height: 100%; border: none; background-color: #000; }
         #channel-title { position: absolute; top: 10px; left: 10px; background-color: rgba(0,0,0,0.6); padding: 10px; font-size: 2vw; border-radius: 5px; z-index: 50; }
         .swipe-area { position: absolute; top: 0; width: 50%; height: 100%; z-index: 100; /* Test: background-color: rgba(255,0,0,0.1); */ }
@@ -23,47 +22,42 @@
     <div id="interaction-layer" onclick="initializeAudio()">Başlatmak için<br>Ekrana Dokunun</div>
     <div id="channel-title"></div>
     <div id="main-container"></div>
+    <!-- KANAL DEĞİŞTİRME ARTIK SADECE BU İKİ ELEMENTLE YAPILIYOR -->
     <div class="swipe-area" id="swipe-left" onclick="changeChannel(-1)"></div>
     <div class="swipe-area" id="swipe-right" onclick="changeChannel(1)"></div>
 
     <script>
         let channels, currentChannelIndex = 0;
-        let clockInterval, isInitialized = false;
+        let isInitialized = false;
 
-        const mainContainer = document.getElementById('main-container');
-        const titleElement = document.getElementById('channel-title');
-
-        // Bu fonksiyon SADECE kullanıcı ekrana dokunduğunda çalışır.
         function initializeAudio() {
             if (isInitialized) return;
             document.getElementById('interaction-layer').style.display = 'none';
-
-            // Tüm video elementlerini bul ve sessizce başlatıp duraklat.
-            // Bu, tarayıcının "otomatik oynatma iznini" almamızı sağlar.
             document.querySelectorAll('video').forEach(video => {
                 video.muted = true;
-                video.play().then(() => {
-                    video.pause();
-                    video.muted = false;
-                }).catch(e => console.error("Video ön yükleme hatası:", e));
+                const playPromise = video.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        video.pause();
+                        video.muted = false;
+                    }).catch(e => console.error("Video ön yükleme hatası:", e));
+                }
             });
             isInitialized = true;
-            // İlk kanalı şimdi göster
             showChannel(currentChannelIndex);
         }
         
         function buildChannels() {
+            const mainContainer = document.getElementById('main-container');
             channels.forEach((channel, index) => {
                 const container = document.createElement('div');
                 container.id = `channel-${index}`;
                 container.classList.add('channel-container');
-
                 if (channel.type === 'clock') {
                     container.id = 'container-clock';
                     container.innerHTML = `<div id="clock-time"></div><div id="clock-date"></div>`;
                 } else if (channel.type === 'video') {
-                    // Videonun `autoplay` özelliğini kaldırıyoruz, kontrol bizde.
-                    container.innerHTML = `<video src="${channel.url}" controlslist="nodownload" loop></video>`;
+                    container.innerHTML = `<video src="${channel.url}" loop></video>`;
                 } else if (channel.type === 'web_content') {
                     container.innerHTML = `<iframe src="${channel.url}" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>`;
                 }
@@ -72,24 +66,18 @@
         }
         
         function showChannel(index) {
-            // Henüz ilk etkileşim olmadıysa hiçbir şey yapma
             if (!isInitialized) return;
-
+            const titleElement = document.getElementById('channel-title');
             document.querySelectorAll('.channel-container').forEach((el, i) => {
                 const video = el.querySelector('video');
                 if (i === index) {
                     el.classList.add('active');
                     titleElement.innerText = channels[i].title;
-
-                    if (channels[i].type === 'clock') {
-                        updateClock();
-                        clockInterval = setInterval(updateClock, 1000);
-                    } else if (video) {
-                        video.play();
-                    }
+                    if (channels[i].type === 'clock') updateClock(true);
+                    else if (video) video.play();
                 } else {
                     el.classList.remove('active');
-                    clearInterval(clockInterval);
+                    if (channels[i].type === 'clock') updateClock(false);
                     if (video) video.pause();
                 }
             });
@@ -100,23 +88,30 @@
             showChannel(currentChannelIndex);
         }
         
-        function updateClock() {
-            const timeEl = document.getElementById('clock-time');
-            const dateEl = document.getElementById('clock-date');
-            if(timeEl) timeEl.innerText = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-            if(dateEl) dateEl.innerText = new Date().toLocaleDateString('tr-TR', { weekday: 'long', month: 'long', day: 'numeric' });
+        let clockInterval;
+        function updateClock(start) {
+            clearInterval(clockInterval);
+            if(start) {
+                const tick = () => {
+                    const now = new Date();
+                    const timeEl = document.getElementById('clock-time');
+                    const dateEl = document.getElementById('clock-date');
+                    if(timeEl) timeEl.innerText = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                    if(dateEl) dateEl.innerText = now.toLocaleDateString('tr-TR', { weekday: 'long', month: 'long', day: 'numeric' });
+                };
+                tick();
+                clockInterval = setInterval(tick, 1000);
+            }
         }
         
-        // Önce kanalları oluştur, sonra başlatmak için etkileşim bekle.
         fetch('config.json')
             .then(response => response.json())
             .then(data => {
                 channels = data.channels;
                 buildChannels();
-                // İlk kanalı göstermeden önce etkileşimi bekleyeceğiz.
             })
             .catch(error => {
-                titleElement.innerText = 'Yapılandırma yüklenemedi.';
+                document.getElementById('channel-title').innerText = 'Yapılandırma yüklenemedi.';
                 document.getElementById('interaction-layer').innerText = 'Hata Oluştu.';
             });
     </script>
