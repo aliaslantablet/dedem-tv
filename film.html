@@ -1,27 +1,23 @@
 <!DOCTYPE html>
 <html>
-<head><title>Film</title><style>body,html{margin:0;padding:0;height:100%;background:#000}video{width:100%;height:100%}</style></head>
+<head>
+    <title>Haber2</title>
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000; }
+        iframe { width: 100%; height: 100%; border: none; }
+    </style>
+</head>
 <body>
-    <video id="player" src="https://archive.org/download/HababamSinifi/Hababam.Sinifi.1975.mp4" autoplay loop controlslist="nodownload"></video>
-    <script>
-        const player = document.getElementById('player');
-        const storageKey = 'videoTime_film';
-        
-        player.addEventListener('loadedmetadata', () => {
-            const savedTime = localStorage.getItem(storageKey);
-            if(savedTime) {
-                player.currentTime = parseFloat(savedTime);
-            }
-            player.play().catch(e => { // Oynatma izni için
-                 document.body.addEventListener('click', ()=> player.play(), {once:true});
-            });
-        });
-
-        setInterval(() => {
-            if (!player.paused) {
-                localStorage.setItem(storageKey, player.currentTime);
-            }
-        }, 5000); // Her 5 saniyede bir kaydet
-    </script>
+    <!-- 
+        Video Invidious üzerinden, reklamsız olarak gömülüyor. 
+        Parametreler:
+        autoplay=1 -> Otomatik başlat
+        local=true -> Invidious arayüzünü gizle, sadece videoyu göster
+        controls=0 -> Oynatıcı kontrollerini gizle
+    -->
+    <iframe 
+        src="https://invidious.privacydev.net/embed/RNVNlJSUFoE?autoplay=1&local=true&controls=0" 
+        allow="autoplay; encrypted-media">
+    </iframe>
 </body>
 </html>
