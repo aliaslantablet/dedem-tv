@@ -1,17 +1,4 @@
 {
-    "items": [
-        {
-            "type": "youtube",
-            "videoId": "vhOeV8QsVzo"
-        },
-        {
-            "type": "message",
-            "text": "Canım Dedem, nasılsın? Bu bir sesli mektup.",
-            "audioUrl": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"
-        },
-        {
-            "type": "youtube",
-            "videoId": "0Ofyz2T0I9c"
-        }
-    ]
+    "startVideoId": "vhOeV8QsVzo",
+    "idleTimeoutMinutes": 30
 }
