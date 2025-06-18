@@ -5,89 +5,99 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>DedemTV</title>
     <style>
-        body, html { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; background-color: #000; }
-        .fullscreen-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        #player { width: 100%; height: 100%; border: none; }
-        .control-area { position: absolute; top: 0; width: 50%; height: 100%; z-index: 10; 
-            /* Test için görünür yap: background-color: rgba(255,0,0,0.1); */
-        }
-        #rewind-area { left: 0; } #forward-area { right: 0; }
-        #screensaver { background-color: #000; color: white; display: none; justify-content: center; align-items: center; font-size: 8vw; text-align: center; }
-        #interaction-layer { background-color: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; font-size: 5vw; z-index: 100; }
+        body, html { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; background-color: #000; color: white; font-family: sans-serif; }
+        .channel-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; opacity: 0; z-index: 1; transition: opacity 0.3s; pointer-events: none; }
+        .channel-container.active { opacity: 1; z-index: 2; pointer-events: auto; }
+        .channel-container#container-clock { display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #clock-time { font-size: 15vw; }
+        #clock-date { font-size: 5vw; }
+        .channel-container video, .channel-container iframe { width: 100%; height: 100%; border: none; background-color: #000; }
+        #channel-title { position: absolute; top: 10px; left: 10px; background-color: rgba(0,0,0,0.6); padding: 10px; font-size: 2vw; border-radius: 5px; z-index: 50; }
+        .swipe-area { position: absolute; top: 0; width: 50%; height: 100%; z-index: 100; }
+        #swipe-left { left: 0; } #swipe-right { right: 0; }
     </style>
 </head>
 <body>
-    <div id="interaction-layer" class="fullscreen-container" onclick="startPlayback()">Oynatmak için<br>Ekrana Dokunun</div>
-    <div id="player-container" class="fullscreen-container">
-        <div id="player"></div>
-    </div>
-    <div id="screensaver" class="fullscreen-container" onclick="wakeUp()">
-        <span id="clock"></span>
-    </div>
-    <div class="control-area" id="rewind-area" onclick="seek(-15)"></div>
-    <div class="control-area" id="forward-area" onclick="seek(15)"></div>
-    <script src="https://www.youtube.com/iframe_api"></script>
+    <div id="channel-title"></div>
+    <div id="main-container"></div>
+    <div class="swipe-area" id="swipe-left" onclick="changeChannel(-1)"></div>
+    <div class="swipe-area" id="swipe-right" onclick="changeChannel(1)"></div>
+
     <script>
-        let player, config;
-        let idleTimer, clockTimer;
-        let isReady = false;
+        let channels, currentChannelIndex = 0;
+        let clockInterval;
 
-        function startPlayback() {
-            document.getElementById('interaction-layer').style.display = 'none';
-            fetch('config.json')
-                .then(response => response.json())
-                .then(data => {
-                    config = data;
-                    player = new YT.Player('player', {
-                        videoId: config.startVideoId,
-                        playerVars: { 
-                            'autoplay': 1, 'controls': 0, 'rel': 0, 'iv_load_policy': 3,
-                            'playlist': config.startVideoId, 'loop': 1 // Aynı videoyu sürekli döngüye al
-                        },
-                        events: { 'onReady': onPlayerReady }
-                    });
-                });
-        }
+        const mainContainer = document.getElementById('main-container');
+        const titleElement = document.getElementById('channel-title');
 
-        function onPlayerReady(event) {
-            isReady = true;
-            event.target.playVideo();
-            resetIdleTimer();
-        }
+        fetch('config.json')
+            .then(response => response.json())
+            .then(data => {
+                channels = data.channels;
+                buildChannels();
+                showChannel(0);
+            })
+            .catch(error => titleElement.innerText = 'Yapılandırma yüklenemedi.');
+            
+        function buildChannels() {
+            channels.forEach((channel, index) => {
+                const container = document.createElement('div');
+                container.id = `channel-${index}`;
+                container.classList.add('channel-container');
 
-        function seek(seconds) {
-            if (!isReady) return;
-            player.seekTo(player.getCurrentTime() + seconds, true);
-            resetIdleTimer();
-        }
-
-        function resetIdleTimer() {
-            wakeUp();
-            clearTimeout(idleTimer);
-            idleTimer = setTimeout(goToSleep, config.idleTimeoutMinutes * 60 * 1000);
-        }
-
-        function goToSleep() {
-            if (!isReady) return;
-            player.pauseVideo();
-            document.getElementById('screensaver').style.display = 'flex';
-            updateClock();
-            clockTimer = setInterval(updateClock, 1000);
+                if (channel.type === 'clock') {
+                    container.id = 'container-clock';
+                    container.innerHTML = `<div id="clock-time"></div><div id="clock-date"></div>`;
+                } else if (channel.type === 'video') {
+                    container.innerHTML = `<video src="${channel.url}" controls loop></video>`;
+                } else if (channel.type === 'web_content') {
+                    container.innerHTML = `<iframe src="${channel.url}" sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>`;
+                }
+                mainContainer.appendChild(container);
+            });
         }
         
-        function wakeUp() {
-            if (!isReady) return;
-            clearInterval(clockTimer);
-            document.getElementById('screensaver').style.display = 'none';
-            player.playVideo();
+        function showChannel(index) {
+            // Önceki kanalı duraklat
+            const prevChannelIndex = (index - 1 + channels.length) % channels.length;
+            const prevContainer = document.getElementById(`channel-${prevChannelIndex}`);
+            const prevVideo = prevContainer ? prevContainer.querySelector('video') : null;
+            if (prevVideo) prevVideo.pause();
+
+            document.querySelectorAll('.channel-container').forEach((el, i) => {
+                const video = el.querySelector('video');
+                if (i === index) {
+                    el.classList.add('active');
+                    titleElement.innerText = channels[i].title;
+                    if (channels[i].type === 'clock') {
+                        updateClock();
+                        clockInterval = setInterval(updateClock, 1000);
+                    } else if (video) {
+                        video.play();
+                    }
+                } else {
+                    el.classList.remove('active');
+                    clearInterval(clockInterval);
+                    // Videoları duraklatmak daha iyi performans sağlar
+                    if (video && i !== (index + 1 + channels.length) % channels.length) { // bir sonraki ve önceki dışındakileri duraklat
+                         if (video) video.pause();
+                    }
+                }
+            });
         }
 
+        function changeChannel(direction) {
+            currentChannelIndex = (currentChannelIndex + direction + channels.length) % channels.length;
+            showChannel(currentChannelIndex);
+        }
+        
         function updateClock() {
-            document.getElementById('clock').innerText = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            const now = new Date();
+            const timeEl = document.getElementById('clock-time');
+            const dateEl = document.getElementById('clock-date');
+            if(timeEl) timeEl.innerText = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            if(dateEl) dateEl.innerText = now.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         }
-
-        document.addEventListener('click', resetIdleTimer);
-
     </script>
 </body>
 </html>
