@@ -1,23 +1,8 @@
 {
     "channels": [
-        {
-            "type": "clock",
-            "title": "Saat ve Tarih"
-        },
-        {
-            "type": "video",
-            "title": "Nostalji Müzik",
-            "url": "https://archive.org/download/VEED-project-3221_202302/VED-project.mp4" 
-        },
-        {
-            "type": "web_content",
-            "title": "Haberler",
-            "url": "https://www.trthaber.com/canli-yayin-izle.html" 
-        },
-        {
-            "type": "video",
-            "title": "Yeşilçam Sineması",
-            "url": "https://archive.org/download/HababamSinifi/Hababam.Sinifi.1975.mp4"
-        }
+        "saat.html",
+        "muzik.html",
+        "haber.html",
+        "film.html"
     ]
 }
