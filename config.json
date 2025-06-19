@@ -1,8 +1,11 @@
 {
+    "server_port": 8001,
     "channels": [
-        "saat.html",
-        "muzik.html",
-        "haber.html",
-        "film.html"
+        { "type": "clock", "title": "Saat ve Tarih" },
+        { "type": "video", "title": "Türküler", "filename": "1.mp4" },
+        { "type": "video", "title": "Yeşilçam", "filename": "2.mp4" },
+        { "type": "video", "title": "Nostalji", "filename": "3.mp4" },
+        { "type": "video", "title": "Belgesel", "filename": "4.mp4" },
+        { "type": "video", "title": "Doğa Manzaraları", "filename": "5.mp4" }
     ]
 }
