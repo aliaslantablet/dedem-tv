@@ -5,35 +5,130 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>DedemTV</title>
     <style>
-        body, html { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; background-color: #000; }
-        #channel-frame { width: 100%; height: 100%; border: none; }
-        .swipe-area { position: absolute; top: 0; width: 15%; height: 100%; z-index: 100; /* Test: background-color: rgba(255,0,0,0.1); */ }
+        body, html { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; background-color: #000; color: white; font-family: sans-serif; cursor: none; }
+        .channel-container { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .channel-container.active { display: block; }
+        #container-clock { display: none; flex-direction: column; justify-content: center; align-items: center; }
+        .active#container-clock { display: flex; }
+        #clock-time { font-size: 15vw; } #clock-date { font-size: 5vw; }
+        video { width: 100%; height: 100%; border: none; background-color: #000; }
+        #channel-title { position: absolute; top: 10px; left: 10px; background-color: rgba(0,0,0,0.6); padding: 10px; font-size: 2vw; border-radius: 5px; z-index: 50; }
+        .swipe-area { position: absolute; top: 0; width: 25%; height: 100%; z-index: 100; }
         #swipe-left { left: 0; } #swipe-right { right: 0; }
+        #interaction-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); display: flex; justify-content: center; align-items: center; font-size: 5vw; z-index: 200; text-align:center; }
     </style>
 </head>
 <body>
-    <iframe id="channel-frame"></iframe>
-    <div class="swipe-area" id="swipe-left" onclick="changeChannel(-1)"></div>
-    <div class="swipe-area" id="swipe-right" onclick="changeChannel(1)"></div>
+    <div id="interaction-layer">Yükleniyor...</div>
+    <div id="channel-title"></div>
+    <div id="main-container"></div>
+    <div class="swipe-area" id="swipe-left"></div>
+    <div class="swipe-area" id="swipe-right"></div>
+
     <script>
-        let channels, currentChannelIndex = 0;
-        const frame = document.getElementById('channel-frame');
+        let channels, config, currentChannelIndex = 0;
+        let isInitialized = false;
 
         fetch('config.json')
-            .then(res => res.json())
+            .then(response => response.json())
             .then(data => {
+                config = data;
                 channels = data.channels;
-                loadChannel(0);
+                buildChannels();
+                document.getElementById('interaction-layer').innerText = 'Başlatmak için\nEkrana Dokunun';
+            })
+            .catch(error => {
+                document.getElementById('interaction-layer').innerText = 'Yapılandırma Hatası';
+                console.error('Config Error:', error);
             });
 
-        function loadChannel(index) {
-            frame.src = channels[index];
+        function buildChannels() {
+            const mainContainer = document.getElementById('main-container');
+            channels.forEach((channel, index) => {
+                const container = document.createElement('div');
+                container.id = `channel-${index}`;
+                container.classList.add('channel-container');
+                if (channel.type === 'clock') {
+                    container.id = 'container-clock';
+                    container.innerHTML = `<div id="clock-time"></div><div id="clock-date"></div>`;
+                } else if (channel.type === 'video') {
+                    // Lokal sunucu adresini oluştur
+                    const videoSrc = `http://localhost:${config.server_port}/${channel.filename}`;
+                    container.innerHTML = `<video data-storagekey="videoTime_${channel.filename}" src="${videoSrc}" loop muted playsinline></video>`;
+                }
+                mainContainer.appendChild(container);
+            });
+        }
+
+        function initializePlayback() {
+            if (isInitialized) return;
+            isInitialized = true;
+            document.getElementById('interaction-layer').style.display = 'none';
+
+            const videos = document.querySelectorAll('video');
+            const playPromises = Array.from(videos).map(v => v.play());
+
+            Promise.all(playPromises).then(() => {
+                videos.forEach(v => {
+                    v.pause();
+                    v.muted = false;
+                    const savedTime = localStorage.getItem(v.dataset.storagekey);
+                    if (savedTime) v.currentTime = parseFloat(savedTime);
+                });
+                showChannel(currentChannelIndex, true);
+            }).catch(e => { console.error("Initial play failed:", e); showChannel(currentChannelIndex, true); });
+        }
+
+        function showChannel(index, forcePlay = false) {
+            if (!isInitialized) return;
+
+            document.querySelectorAll('.channel-container').forEach((el, i) => {
+                const video = el.querySelector('video');
+                document.getElementById('channel-title').innerText = channels[index].title;
+
+                if (i === index) {
+                    el.classList.add('active');
+                    if (channels[i].type === 'clock') startClock();
+                    else if (video && forcePlay) video.play();
+                } else {
+                    el.classList.remove('active');
+                    if (channels[i].type === 'clock') stopClock();
+                    if (video) video.pause();
+                }
+            });
         }
 
         function changeChannel(direction) {
+            const video = document.querySelector(`#channel-${currentChannelIndex} video`);
+            if(video) localStorage.setItem(video.dataset.storagekey, video.currentTime);
+            
             currentChannelIndex = (currentChannelIndex + direction + channels.length) % channels.length;
-            loadChannel(currentChannelIndex);
+            showChannel(currentChannelIndex, true);
         }
+        
+        let clockInterval;
+        function startClock() { /* ... önceki saat kodu ... */ }
+        function stopClock() { /* ... önceki saat kodu ... */ }
+        
+        // Saat kodunu da ekleyelim
+        function startClock() {
+            clearInterval(clockInterval);
+            const tick = () => {
+                const now = new Date();
+                const timeEl = document.getElementById('clock-time');
+                const dateEl = document.getElementById('clock-date');
+                if(timeEl) timeEl.innerText = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+                if(dateEl) dateEl.innerText = now.toLocaleDateString('tr-TR', { weekday: 'long', month: 'long', day: 'numeric' });
+            };
+            tick();
+            clockInterval = setInterval(tick, 1000);
+        }
+
+        function stopClock() { clearInterval(clockInterval); }
+
+        document.getElementById('interaction-layer').addEventListener('click', initializePlayback);
+        document.getElementById('swipe-left').addEventListener('click', (e) => { e.stopPropagation(); changeChannel(-1); });
+        document.getElementById('swipe-right').addEventListener('click', (e) => { e.stopPropagation(); changeChannel(1); });
     </script>
 </body>
 </html>
